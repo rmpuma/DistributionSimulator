@@ -15,12 +15,16 @@ importlib.reload(market_data)
 
 # inputs
 directory = 'C:\\Users\\Meva\\.spyder-py3\\2024-1\\data\\' # hardcoded
-ric = 'SPY'
+ric = 'AAPL'
 
 # computations
 dist = market_data.distribution(ric)
+dist.load_timeseries()
+dist.plot_timeseries()
+dist.compute_stats()
 dist.plot_histogram()
     
+
 # # loop to check normality in real distributions
 # rics = []
 # is_normals = []
