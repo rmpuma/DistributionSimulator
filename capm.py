@@ -4,17 +4,67 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as st
+import scipy.optimize as op
 import importlib
     
 import market_data
 importlib.reload(market_data)
-
 
 def compute_beta(benchmark, security):
     m = model(benchmark, security)
     m.synchronise_timeseries()
     m.compute_linear_regression()
     return m.beta
+
+def compute_correlation(security_1, security_2):
+    m = model(security_1, security_2)
+    m.synchronise_timeseries()
+    m.compute_linear_regression()
+    return m.correlation
+
+def dataframe_correlation_beta(benchmark, position_security, hedge_universe):
+    decimals = 5
+    df = pd.DataFrame()
+    correlations = []
+    betas = []
+    for hedge_security in hedge_universe:
+        correlation = compute_correlation(position_security, hedge_security)
+        beta = compute_beta(benchmark, hedge_security)
+        correlations.append(np.round(correlation, decimals))
+        betas.append(np.round(beta, decimals))
+    df['hedge_security'] = hedge_universe
+    df['correlation'] = correlations
+    df['beta'] = betas
+    df = df.dropna()
+    df = df.sort_values(by='correlation', ascending=False)
+    return df
+
+def dataframe_factors(security, factors):
+    decimals = 5
+    df = pd.DataFrame()
+    correlations = []
+    betas = []
+    for factor in factors:
+        correlation = compute_correlation(factor, security)
+        beta = compute_beta(factor, security)
+        correlations.append(np.round(correlation, decimals))
+        betas.append(np.round(beta, decimals))
+    df['factor'] = factors
+    df['correlation'] = correlations
+    df['beta'] = betas
+    df = df.dropna()
+    df = df.sort_values(by='correlation', ascending=False)
+    return df
+    
+# define the function to minimise for beta- and delta-neutral hedge
+def cost_function_capm(x, betas, target_delta, target_beta, regularisation):
+    dimensions = len(x)
+    deltas = np.ones([dimensions])
+    f_delta = (np.transpose(deltas).dot(x).item() + target_delta)**2
+    f_beta = (np.transpose(betas).dot(x).item() + target_beta)**2
+    f_penalty = regularisation*(np.sum(x**2))
+    f = f_delta + f_beta + f_penalty
+    return f
 
   
 class model:
@@ -99,8 +149,9 @@ class hedger:
         self.hedge_betas = []
         self.hedge_weights = None
         self.hedge_delta_usd = None
+        self.hedge_cost_usd = None
         self.hedge_beta_usd = None
-        
+               
     def compute_betas(self):
         self.position_beta = compute_beta(self.benchmark, self.position_security)
         self.position_beta_usd = self.position_beta * self.position_delta_usd
@@ -108,7 +159,22 @@ class hedger:
             beta = compute_beta(self.benchmark, security)
             self.hedge_betas.append(beta)
             
-    def compute_hedge_weights(self):
+    def compute_hedge_weights(self, regularisation = 0):
+        # initial condition
+        # x0 = - self.position_delta_usd / len(self.hedge_betas) * np.ones([len(self.hedge_betas),1])
+        x0 = [- self.position_delta_usd / len(self.hedge_betas)] * len(self.hedge_betas)
+        # compute optimisation
+        optimal_result = op.minimize(fun=cost_function_capm, x0=x0,\
+                                     args=(self.hedge_betas, \
+                                           self.position_delta_usd, \
+                                           self.position_beta_usd, \
+                                           regularisation))
+        self.hedge_weights = optimal_result.x
+        self.hedge_delta_usd = np.sum(self.hedge_weights)
+        self.hedge_cost_usd = np.sum(np.abs(self.hedge_weights))
+        self.hedge_beta_usd = np.transpose(self.hedge_betas).dot(self.hedge_weights).item()        
+            
+    def compute_hedge_weights_exact(self):
         # exact solution using matrix algebra
         dimensions = len(self.hedge_securities)
         if dimensions != 2:
@@ -121,5 +187,3 @@ class hedger:
         self.hedge_weights = np.linalg.inv(mtx).dot(targets)
         self.hedge_delta_usd = np.sum(self.hedge_weights)
         self.hedge_beta_usd = np.transpose(self.hedge_betas).dot(self.hedge_weights).item()
-        
-        
