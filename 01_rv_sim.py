@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Aug 16 09:33:50 2023
-
-@author: Meva
-"""
 
 import numpy as np
 import pandas as pd
@@ -30,4 +25,5 @@ inputs.decimals = 5
 sim = random_variables.simulator(inputs)
 sim.generate_vector()
 sim.compute_stats()
+
 sim.plot()
