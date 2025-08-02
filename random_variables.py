@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Aug 23 09:35:55 2023
-
-@author: Meva
-"""
 
 import numpy as np
 import pandas as pd
@@ -76,4 +71,5 @@ class simulator:
         plt.figure()
         plt.hist(self.vector,bins=100)
         plt.title(self.str_title)
+
         plt.show()
